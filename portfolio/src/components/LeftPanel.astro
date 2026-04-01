@@ -30,13 +30,13 @@ const currentYear = albums.find(a => a.slug === currentSlug)?.year || ''
 <aside class="left-panel" id="left-panel">
   <div class="panel-top">
     <div class="logo" id="logo">
-      <div class="logo-letter"><img src="/100.png" /><span>Dudito Travel Blog</span></div>
+      <div class="logo-letter"><img src={`${import.meta.env.BASE_URL}100.png`} /><span>Dudito Travel Blog</span></div>
     </div>
     <button class="toggle-btn" id="toggle-btn" aria-label="Toggle panel width">‹</button>
   </div>
 
   <nav class="panel-nav">
-    <a href="/" class={`show-all ${!currentSlug ? 'active' : ''}`} title="Show All">
+    <a href={import.meta.env.BASE_URL} class={`show-all ${!currentSlug ? 'active' : ''}`} title="Show All">
       <span class="nav-icon">⊞</span>
       <span class="nav-label">Show All</span>
     </a>
@@ -51,7 +51,7 @@ const currentYear = albums.find(a => a.slug === currentSlug)?.year || ''
           <div class="acc-body">
             {groups[year].map(album => (
               <a
-                href={`/albums/${album.slug}/`}
+                href={`${import.meta.env.BASE_URL}albums/${album.slug}/`}
                 class={`album-link ${album.slug === currentSlug ? 'active' : ''}`}
                 title={album.name}
               >

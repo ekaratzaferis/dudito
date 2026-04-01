@@ -22,6 +22,7 @@ Adobe Lightroom account ID (hardcoded): `0aa2ddec4f3d4206b464662e22cc690f`
 All API responses are prefixed with `while (1) {}` — strip before `JSON.parse`.
 All rendition `href` values are **relative paths** — prepend `data.base` from the response.
 Renditions live in `resource.asset.links`, NOT the top-level `resource.links`.
+`data.base` from the API returns `https://photos.adobe.io/v2/...` but working rendition URLs use `https://lightroom.adobe.com/v2c/...` — replace domain+version before constructing URLs.
 The header `X-Api-Key: photoshop_ux` is required for rendition URLs.
 
 ### URLs
@@ -105,7 +106,7 @@ cd selector && npm install && node server.js
 
 ## Portfolio Site (`./portfolio`)
 
-Astro.js static site. Reads `selections.json` at build time, downloads images to `public/photos/`.
+Astro.js static site. Reads `selections.json` at build time, fetches metadata from the Lightroom API. Images are served directly from Adobe CDN URLs (no local caching).
 
 ```
 cd portfolio && npm install && npm run dev    # dev server

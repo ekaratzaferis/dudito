@@ -57,7 +57,7 @@ const currentSlug = Astro.params.slug
 
       <div class="photo-grid">
         {selectedPhotos.map(photo => (
-          <a href={`/albums/${currentSlug}/${photo.id}/`} class="photo-card">
+          <a href={`${import.meta.env.BASE_URL}albums/${currentSlug}/${photo.id}/`} class="photo-card">
             <div class="photo-thumb">
               {photo.thumbnailUrl
                 ? <img src={photo.thumbnailUrl} alt="" loading="lazy" />

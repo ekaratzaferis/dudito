@@ -129,7 +129,7 @@ const showLocation = locationStr || hasGPS
 
     <!-- ── Top Bar ── -->
     <header class="top-bar">
-      <a href={`/albums/${slug}/`} class="back-link" title="Back to album">
+      <a href={`${import.meta.env.BASE_URL}albums/${slug}/`} class="back-link" title="Back to album">
         ← <span class="back-label">{albumName}</span>
       </a>
       <span class="top-counter">{index + 1} / {total}</span>
@@ -270,12 +270,12 @@ const showLocation = locationStr || hasGPS
     <!-- ── Bottom Nav ── -->
     <nav class="bottom-nav">
       {prevId
-        ? <a href={`/albums/${slug}/${prevId}/`} class="nav-btn" id="prev-btn">‹</a>
+        ? <a href={`${import.meta.env.BASE_URL}albums/${slug}/${prevId}/`} class="nav-btn" id="prev-btn">‹</a>
         : <span class="nav-btn disabled">‹</span>
       }
       <span class="nav-counter">{index + 1} of {total}</span>
       {nextId
-        ? <a href={`/albums/${slug}/${nextId}/`} class="nav-btn" id="next-btn">›</a>
+        ? <a href={`${import.meta.env.BASE_URL}albums/${slug}/${nextId}/`} class="nav-btn" id="next-btn">›</a>
         : <span class="nav-btn disabled">›</span>
       }
       <button class="nav-btn autoplay-btn" id="autoplay-btn">▶ Autoplay</button>

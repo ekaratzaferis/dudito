@@ -103,7 +103,7 @@ async function loadAlbum() {
     // Fetch photos
     const assetsData = await fetch(`/api/lr/assets?account=${account}&album=${album}`).then(r => r.json())
     state.photos = assetsData.resources || []
-    state.base = assetsData.base || ''
+    state.base = (assetsData.base || '').replace('https://photos.adobe.io/v2/', 'https://lightroom.adobe.com/v2c/')
 
     renderGrid()
     updateCount()

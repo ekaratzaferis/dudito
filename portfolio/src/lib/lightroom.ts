@@ -1,6 +1,3 @@
-import { writeFileSync, mkdirSync, existsSync } from 'node:fs'
-import { resolve, dirname } from 'node:path'
-
 const ACCOUNT = '0aa2ddec4f3d4206b464662e22cc690f'
 const BASE = `https://lightroom.adobe.com/v2/spaces/${ACCOUNT}`
 const LR_HEADERS = { 'X-Api-Key': 'photoshop_ux' }
@@ -73,31 +70,13 @@ export function slugify(name: string): string {
     .replace(/^-|-$/g, '')
 }
 
-// ── Image download (build-time) ───────────────────
-
-const PHOTOS_DIR = resolve(process.cwd(), 'public/photos')
-
-async function downloadImage(remoteUrl: string, localPath: string): Promise<void> {
-  if (!remoteUrl) return
-  if (existsSync(localPath)) return  // skip if already cached
-  try {
-    const r = await fetch(remoteUrl, { headers: LR_HEADERS })
-    if (!r.ok) return
-    const buf = await r.arrayBuffer()
-    mkdirSync(dirname(localPath), { recursive: true })
-    writeFileSync(localPath, Buffer.from(buf))
-  } catch {
-    // silently skip failed downloads — page still builds, img just 404s
-  }
-}
-
 // ── API ───────────────────────────────────────────
 
 export async function fetchResources(): Promise<AlbumMeta[]> {
   const data = await fetchLR(`${BASE}/resources`)
-  const base: string = data.base || ''
+  const base: string = (data.base || '').replace('https://photos.adobe.io/v2/', 'https://lightroom.adobe.com/v2c/')
 
-  const albums: AlbumMeta[] = (data.resources || [])
+  return (data.resources || [])
     .filter((r: any) => r.type === 'album')
     .map((r: any) => {
       const links = r.links || {}
@@ -111,18 +90,6 @@ export async function fetchResources(): Promise<AlbumMeta[]> {
         year: extractYear(r.payload?.name || ''),
       }
     })
-
-  // Download cover images
-  await Promise.all(
-    albums.map(async album => {
-      if (!album.coverUrl) return
-      const localPath = resolve(PHOTOS_DIR, `${album.id}/cover.jpg`)
-      await downloadImage(album.coverUrl, localPath)
-      album.coverUrl = `/photos/${album.id}/cover.jpg`
-    })
-  )
-
-  return albums
 }
 
 export async function fetchAlbumAssets(albumId: string): Promise<PhotoAsset[]> {
@@ -130,42 +97,21 @@ export async function fetchAlbumAssets(albumId: string): Promise<PhotoAsset[]> {
     `${BASE}/albums/${albumId}/assets` +
     `?embed=asset%3Bself&order_after=-&exclude=incomplete&subtype=image%3Bvideo%3Blayout_segment`
   const data = await fetchLR(url)
-  const base: string = data.base || ''
+  const base: string = (data.base || '').replace('https://photos.adobe.io/v2/', 'https://lightroom.adobe.com/v2c/')
 
-  const assets: PhotoAsset[] = (data.resources || []).map((resource: any) => {
-    const assetLinks = resource.asset?.links || {}
+  return (data.resources || []).map((resource: any) => {
+    const assetLinks  = resource.asset?.links || {}
     const assetPayload = resource.asset?.payload || {}
-    const assetId = resource.asset?.id || resource.id
+    const assetId     = resource.asset?.id || resource.id
 
     return {
       id: assetId,
       thumbnailUrl: rendition(assetLinks, 'thumbnail2x', base) || rendition(assetLinks, '640', base),
-      url2048: rendition(assetLinks, '2048', base) || rendition(assetLinks, '1280', base),
-      captureDate: assetPayload.captureDate || '',
-      xmp: assetPayload.xmp || {},
+      url2048:      rendition(assetLinks, '2048', base)         || rendition(assetLinks, '1280', base),
+      captureDate:  assetPayload.captureDate || '',
+      xmp:          assetPayload.xmp || {},
       importSource: assetPayload.importSource,
-      location: assetPayload.location,
+      location:     assetPayload.location,
     }
   })
-
-  // Download images in parallel (max 5 at a time to avoid overwhelming)
-  const chunk = 5
-  for (let i = 0; i < assets.length; i += chunk) {
-    await Promise.all(
-      assets.slice(i, i + chunk).map(async asset => {
-        const thumbPath = resolve(PHOTOS_DIR, `${asset.id}/thumb.jpg`)
-        const fullPath  = resolve(PHOTOS_DIR, `${asset.id}/full.jpg`)
-
-        await Promise.all([
-          downloadImage(asset.thumbnailUrl, thumbPath),
-          downloadImage(asset.url2048,      fullPath),
-        ])
-
-        asset.thumbnailUrl = `/photos/${asset.id}/thumb.jpg`
-        asset.url2048      = `/photos/${asset.id}/full.jpg`
-      })
-    )
-  }
-
-  return assets
 }

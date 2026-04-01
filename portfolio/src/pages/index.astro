@@ -49,7 +49,7 @@ const panelAlbums = albums.map(a => ({ slug: a.slug, name: a.name, year: a.year 
       ) : (
         <div class="album-grid">
           {albums.map(album => (
-            <a href={`/albums/${album.slug}/`} class="album-card">
+            <a href={`${import.meta.env.BASE_URL}albums/${album.slug}/`} class="album-card">
               <div class="album-cover">
                 {album.coverUrl
                   ? <img src={album.coverUrl} alt={album.name} loading="lazy" />
