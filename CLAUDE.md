@@ -174,7 +174,6 @@ Font: Roboto Condensed (Google Fonts)
 
 
 ## Local Alias
-+dudito() {                                                                                                                   
-(cd /Users/ekaratzaferis/Documents/dev/dudito/selector && npm start &)                                                     
-  sleep 1 && open http://localhost:3000                                                                                      
++dudito() {                                                                                                            (sleep 1 && open http://localhost:3000) &                                                       
+  cd /Users/ekaratzaferis/Documents/dev/dudito/selector && npm start                                                                                    
 }  
