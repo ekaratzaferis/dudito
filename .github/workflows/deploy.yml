@@ -33,7 +33,8 @@ jobs:
       - name: Build Astro site
         working-directory: portfolio
         run: npm run build
-        # dist/ will have base='/portfolio' baked in
+        env:
+          BASE_PATH: /dudito/portfolio
 
       - name: Prepare Pages root
         run: |
