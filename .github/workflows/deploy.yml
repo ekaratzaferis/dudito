@@ -34,7 +34,7 @@ jobs:
         working-directory: portfolio
         run: npm run build
         env:
-          BASE_PATH: /portfolio
+          BASE_PATH: /
 
       - name: Prepare Pages root
         run: |

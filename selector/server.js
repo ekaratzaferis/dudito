@@ -26,10 +26,21 @@ app.get('/api/lr/resources', async (req, res) => {
 app.get('/api/lr/assets', async (req, res) => {
   const { account, album } = req.query
   if (!account || !album) return res.status(400).json({ error: 'account and album required' })
-  const url = `https://lightroom.adobe.com/v2/spaces/${account}/albums/${album}/assets?embed=asset%3Bself&order_after=-&exclude=incomplete&subtype=image%3Bvideo%3Blayout_segment`
-  const r = await fetch(url)
-  const text = await r.text()
-  res.json(parseLR(text))
+
+  let allResources = []
+  let base = ''
+  let url = `https://lightroom.adobe.com/v2/spaces/${account}/albums/${album}/assets?embed=asset%3Bself&order_after=-&exclude=incomplete&subtype=image%3Bvideo%3Blayout_segment`
+
+  while (url) {
+    const r = await fetch(url)
+    const data = parseLR(await r.text())
+    if (!base) base = data.base || ''
+    allResources = allResources.concat(data.resources || [])
+    const nextHref = data.links?.next?.href
+    url = nextHref ? (nextHref.startsWith('http') ? nextHref : base + nextHref) : null
+  }
+
+  res.json({ resources: allResources, base })
 })
 
 app.get('/api/img', async (req, res) => {
