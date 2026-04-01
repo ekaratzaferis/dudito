@@ -124,7 +124,15 @@ const hasGPS      = loc.latitude != null && loc.longitude != null
 const showLocation = locationStr || hasGPS
 ---
 
-<BaseLayout title={`${albumName} · ${index + 1} / ${total}`}>
+<BaseLayout
+  title={`${albumName} · ${index + 1} / ${total}`}
+  ogImage={photo.url2048 || photo.thumbnailUrl || undefined}
+  ogDescription={[
+    dateFormatted,
+    showCamera ? cameraItems.join(' · ') : null,
+    showSettings ? settingsParts.join('  ') : null,
+  ].filter(Boolean).join(' — ') || undefined}
+>
   <div class="photo-page">
 
     <!-- ── Top Bar ── -->

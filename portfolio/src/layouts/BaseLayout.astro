@@ -4,8 +4,11 @@ import { ViewTransitions } from 'astro:transitions'
 
 interface Props {
   title?: string
+  ogImage?: string
+  ogDescription?: string
 }
-const { title = 'Duditos' } = Astro.props
+const { title = 'Duditos', ogImage, ogDescription } = Astro.props
+const canonicalUrl = Astro.url.href
 ---
 <!DOCTYPE html>
 <html lang="en">
@@ -14,6 +17,17 @@ const { title = 'Duditos' } = Astro.props
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{title}</title>
   <link rel="icon" type="image/svg+xml" href={`${import.meta.env.BASE_URL}favicon.svg`} />
+
+  <meta property="og:title" content={title} />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content={canonicalUrl} />
+  {ogImage && <meta property="og:image" content={ogImage} />}
+  {ogDescription && <meta property="og:description" content={ogDescription} />}
+  <meta name="twitter:card" content={ogImage ? 'summary_large_image' : 'summary'} />
+  <meta name="twitter:title" content={title} />
+  {ogImage && <meta name="twitter:image" content={ogImage} />}
+  {ogDescription && <meta name="twitter:description" content={ogDescription} />}
+
   <ViewTransitions />
 </head>
 <body>

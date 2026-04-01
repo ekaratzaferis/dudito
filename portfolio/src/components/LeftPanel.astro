@@ -82,8 +82,11 @@ const currentYear = albums.find(a => a.slug === currentSlug)?.year || ''
       try { sessionStorage.setItem(KEY, String(thin)) } catch {}
     }
 
+    // Apply initial state without animating
+    panel.style.transition = 'none'
     const stored = sessionStorage.getItem(KEY)
     setThin(stored === 'true')
+    requestAnimationFrame(() => { panel.style.transition = '' })
 
     toggleBtn.addEventListener('click', () => setThin(!panel.classList.contains('thin')))
 
