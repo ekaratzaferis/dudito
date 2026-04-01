@@ -37,7 +37,7 @@ if (hasSelections) {
 const panelAlbums = albums.map(a => ({ slug: a.slug, name: a.name, year: a.year }))
 ---
 
-<BaseLayout title="Portfolio">
+<BaseLayout>
   {hasSelections && <LeftPanel albums={panelAlbums} />}
 
   <div class="page-layout" class:list={[{ 'has-panel': hasSelections }]}>

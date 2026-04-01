@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <style>@import url(https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@700);</style>
+  </defs>
+  <rect width="32" height="32" rx="7" fill="#1A2744"/>
+  <text x="16" y="23" font-family="'Roboto Condensed', sans-serif" font-size="22" font-weight="700" fill="white" text-anchor="middle">D</text>
+</svg>
