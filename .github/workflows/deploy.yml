@@ -34,7 +34,7 @@ jobs:
         working-directory: portfolio
         run: npm run build
         env:
-          BASE_PATH: /dudito/portfolio
+          BASE_PATH: /portfolio
 
       - name: Prepare Pages root
         run: |
