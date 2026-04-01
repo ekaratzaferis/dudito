@@ -117,7 +117,8 @@ const currentYear = albums.find(a => a.slug === currentSlug)?.year || ''
     overflow: hidden;
   }
 
-  .left-panel.thin {
+  .left-panel.thin,
+  :global(body.panel-thin) .left-panel {
     width: var(--panel-width-thin);
   }
 
@@ -224,17 +225,19 @@ const currentYear = albums.find(a => a.slug === currentSlug)?.year || ''
     transition: opacity var(--transition);
   }
 
-  .left-panel.thin .nav-label {
+  .left-panel.thin .nav-label,
+  :global(body.panel-thin) .nav-label {
     opacity: 0;
     pointer-events: none;
   }
 
-  .left-panel.thin .toggle-btn {
-    /* center the toggle button when thin */
+  .left-panel.thin .toggle-btn,
+  :global(body.panel-thin) .toggle-btn {
     margin: 0 auto;
   }
 
-  .left-panel.thin .panel-top {
+  .left-panel.thin .panel-top,
+  :global(body.panel-thin) .panel-top {
     justify-content: center;
     flex-direction: column;
     gap: var(--space-2);
@@ -275,9 +278,14 @@ const currentYear = albums.find(a => a.slug === currentSlug)?.year || ''
   .acc-item.open .acc-chevron { transform: rotate(90deg); }
 
   /* Hide chevron and albums in thin mode */
-  .left-panel.thin .acc-chevron { display: none; }
-  .left-panel.thin .acc-body    { display: none !important; }
-  .left-panel.thin .acc-header  { justify-content: center; padding: var(--space-1) 0; }
+  .left-panel.thin .acc-chevron,
+  :global(body.panel-thin) .acc-chevron { display: none; }
+
+  .left-panel.thin .acc-body,
+  :global(body.panel-thin) .acc-body    { display: none !important; }
+
+  .left-panel.thin .acc-header,
+  :global(body.panel-thin) .acc-header  { justify-content: center; padding: var(--space-1) 0; }
 
   .acc-body {
     display: none;

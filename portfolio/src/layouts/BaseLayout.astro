@@ -17,6 +17,9 @@ const { title = 'Duditos' } = Astro.props
   <ViewTransitions />
 </head>
 <body>
+  <script is:inline>
+    try { if (sessionStorage.getItem('panel-thin') === 'true') document.body.classList.add('panel-thin') } catch {}
+  </script>
   <slot />
 </body>
 </html>
