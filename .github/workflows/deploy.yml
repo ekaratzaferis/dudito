@@ -38,8 +38,8 @@ jobs:
 
       - name: Prepare Pages root
         run: |
-          mkdir -p pages/portfolio
-          cp -r portfolio/dist/* pages/portfolio/
+          mkdir -p pages
+          cp -r portfolio/dist/* pages/
 
       - uses: actions/configure-pages@v4
 
