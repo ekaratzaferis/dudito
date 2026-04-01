@@ -1,0 +1,799 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro'
+import { fetchResources, fetchAlbumAssets } from '../../../lib/lightroom'
+import selectionsRaw from '../../../../selections.json'
+
+export async function getStaticPaths() {
+  const sel = selectionsRaw as Record<string, { slug: string; photos: string[] }>
+  const resources = await fetchResources()
+
+  const paths = []
+
+  for (const [albumId, { slug, photos: selectedIds }] of Object.entries(sel)) {
+    const resource = resources.find(r => r.id === albumId)
+    const allAssets = await fetchAlbumAssets(albumId)
+    const selectedPhotos = allAssets.filter(a => selectedIds.includes(a.id))
+
+    const photoList = selectedPhotos.map(p => ({
+      id: p.id,
+      url: p.url2048 || p.thumbnailUrl,
+    }))
+
+    for (let i = 0; i < selectedPhotos.length; i++) {
+      const photo = selectedPhotos[i]
+      paths.push({
+        params: { slug, photoId: photo.id },
+        props: {
+          photo,
+          albumName: resource?.name ?? albumId,
+          index: i,
+          total: selectedPhotos.length,
+          prevId: i > 0 ? selectedPhotos[i - 1].id : null,
+          nextId: i < selectedPhotos.length - 1 ? selectedPhotos[i + 1].id : null,
+          photoList,
+        },
+      })
+    }
+  }
+
+  return paths
+}
+
+const { photo, albumName, index, total, prevId, nextId, photoList } = Astro.props
+const { slug } = Astro.params
+
+// ── EXIF helpers ──────────────────────────────────
+
+// Resolve [numerator, denominator] arrays or plain numbers to a float
+function getRational(val: any): number | null {
+  if (val == null) return null
+  if (typeof val === 'number') return val
+  if (Array.isArray(val) && val.length >= 2) {
+    const [n, d] = val
+    return d === 0 ? null : n / d
+  }
+  if (typeof val === 'object') {
+    if ('float' in val) return val.float as number
+    if ('numerator' in val && 'denominator' in val)
+      return val.denominator === 0 ? null : val.numerator / val.denominator
+  }
+  return null
+}
+
+function fmtAperture(val: any): string | null {
+  const n = getRational(val)
+  if (n == null) return null
+  const s = Number.isInteger(n) ? String(n) : n.toFixed(1)
+  return `f / ${s}`
+}
+
+function fmtShutter(val: any): string | null {
+  if (Array.isArray(val) && val.length >= 2) return `${val[0]} / ${val[1]} sec`
+  const n = getRational(val)
+  if (n == null) return null
+  return n < 1 ? `1 / ${Math.round(1 / n)} sec` : `${n} sec`
+}
+
+function fmtFocal(val: any): string | null {
+  const n = getRational(val)
+  return n == null ? null : `${Math.round(n)} mm`
+}
+
+const xmp  = photo.xmp || {}
+const tiff = xmp.tiff || {}
+const exif = xmp.exif || {}
+const aux  = xmp.aux  || {}
+const src  = photo.importSource || {}
+const loc  = photo.location    || {}
+
+// File section
+const fileSuffix     = src.fileName ? (src.fileName.split('.').pop()?.toUpperCase() ?? null) : null
+const fileResolution = src.originalWidth && src.originalHeight ? `${src.originalWidth} × ${src.originalHeight}` : null
+const fileSize       = src.fileSize ? `${(src.fileSize / 1_000_000).toFixed(1)} MB` : null
+const showFile       = fileSuffix || fileResolution || fileSize
+
+// Date section
+let dateFormatted: string | null = null
+let timeFormatted: string | null = null
+if (photo.captureDate) {
+  try {
+    const d = new Date(photo.captureDate)
+    dateFormatted = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    timeFormatted = d.toTimeString().slice(0, 8)
+  } catch {}
+}
+const showDate = dateFormatted || timeFormatted
+
+// Camera section
+const cameraItems = [tiff.Make, tiff.Model, aux.Lens ?? exif.LensModel].filter(Boolean) as string[]
+const showCamera = cameraItems.length > 0
+
+// Settings section (one line)
+const settingsParts = [
+  exif.ISOSpeedRatings != null ? `ISO ${exif.ISOSpeedRatings}` : null,
+  fmtFocal(exif.FocalLength),
+  fmtAperture(exif.FNumber ?? exif.ApertureValue),
+  fmtShutter(exif.ExposureTime ?? exif.ShutterSpeedValue),
+].filter(Boolean) as string[]
+const showSettings = settingsParts.length > 0
+
+// Location section
+const iptcCore    = (xmp as any)['Iptc4xmpCore'] ?? (xmp as any).iptcCore ?? {}
+const locationStr = iptcCore.Location ?? null
+const hasGPS      = loc.latitude != null && loc.longitude != null
+const showLocation = locationStr || hasGPS
+---
+
+<BaseLayout title={`${albumName} · ${index + 1} / ${total}`}>
+  <div class="photo-page">
+
+    <!-- ── Top Bar ── -->
+    <header class="top-bar">
+      <a href={`/albums/${slug}/`} class="back-link" title="Back to album">
+        ← <span class="back-label">{albumName}</span>
+      </a>
+      <span class="top-counter">{index + 1} / {total}</span>
+    </header>
+
+    <!-- ── Main Area ── -->
+    <div class="main-area" id="main-area">
+
+      <!-- Photo -->
+      <div class="photo-container" id="photo-container">
+        <img
+          id="main-photo"
+          class="main-photo"
+          src={photo.url2048 || photo.thumbnailUrl}
+          alt=""
+          draggable="false"
+        />
+      </div>
+
+      <!-- Info Panel — always visible, toggles thin ↔ wide -->
+      <aside class="right-panel" id="right-panel">
+        <!-- Strip: always visible at 48px -->
+        <button class="rp-strip" id="rp-strip" aria-label="Toggle info panel">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
+            <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5" fill="none"/>
+            <rect x="7.25" y="6.5" width="1.5" height="5.5" rx="0.75"/>
+            <circle cx="8" cy="4.5" r="0.85"/>
+          </svg>
+        </button>
+        <!-- Content: slides in when expanded -->
+        <div class="rp-content" id="rp-content">
+          <div class="rp-header">
+            <span class="rp-title">Info</span>
+            <button class="rp-close" id="rp-close" aria-label="Collapse info">✕</button>
+          </div>
+          <div class="rp-body">
+
+            {/* File */}
+            {showFile && (
+              <div class="exif-section">
+                <div class="exif-icon-col">
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 2H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V6L9 2z"/>
+                    <path d="M9 2v4h4"/>
+                  </svg>
+                </div>
+                <ul class="exif-list">
+                  {fileSuffix     && <li>{fileSuffix}</li>}
+                  {fileResolution && <li>{fileResolution}</li>}
+                  {fileSize       && <li>{fileSize}</li>}
+                </ul>
+              </div>
+            )}
+
+            {/* Date */}
+            {showDate && (
+              <div class="exif-section">
+                <div class="exif-icon-col">
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="3" width="12" height="11" rx="1"/>
+                    <path d="M2 7h12"/>
+                    <path d="M5 2v2M11 2v2"/>
+                  </svg>
+                </div>
+                <ul class="exif-list">
+                  {dateFormatted && <li>{dateFormatted}</li>}
+                  {timeFormatted && <li class="exif-muted">{timeFormatted}</li>}
+                </ul>
+              </div>
+            )}
+
+            {/* Camera */}
+            {showCamera && (
+              <div class="exif-section">
+                <div class="exif-icon-col">
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 5.5a1 1 0 0 1 1-1h2l1.5-2h5L12 4.5h2a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V5.5z"/>
+                    <circle cx="8" cy="8.5" r="2.5"/>
+                  </svg>
+                </div>
+                <ul class="exif-list">
+                  {cameraItems.map(item => <li>{item}</li>)}
+                </ul>
+              </div>
+            )}
+
+            {/* Settings */}
+            {showSettings && (
+              <div class="exif-section">
+                <div class="exif-icon-col">
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                    <circle cx="8" cy="8" r="6"/>
+                    <line x1="8" y1="2" x2="8" y2="5"/>
+                    <line x1="8" y1="11" x2="8" y2="14"/>
+                    <line x1="2" y1="8" x2="5" y2="8"/>
+                    <line x1="11" y1="8" x2="14" y2="8"/>
+                  </svg>
+                </div>
+                <ul class="exif-list">
+                  {/* <li class="exif-settings">{settingsParts.map(part => <span style="padding-right: 1.5em;">{part}</span>)}</li> */}
+                  {settingsParts.map(part => <li class="exif-settings">{part}</li>)}
+                </ul>
+              </div>
+            )}
+
+            {/* Location */}
+            {showLocation && (
+              <div class="exif-section">
+                <div class="exif-icon-col">
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M8 14S3 9.5 3 6.5a5 5 0 0 1 10 0C13 9.5 8 14 8 14z"/>
+                    <circle cx="8" cy="6.5" r="1.5"/>
+                  </svg>
+                </div>
+                <ul class="exif-list">
+                  {locationStr && <li>{locationStr}</li>}
+                  {hasGPS && <li id="geo-location" class="exif-muted">…</li>}
+                  {hasGPS && (
+                    <li>
+                      <div
+                        id="mini-map"
+                        class="mini-map"
+                        data-lat={String(loc.latitude)}
+                        data-lon={String(loc.longitude)}
+                      />
+                    </li>
+                  )}
+                </ul>
+              </div>
+            )}
+
+          </div>
+        </div>
+      </aside>
+
+    </div><!-- /main-area -->
+
+    <!-- ── Bottom Nav ── -->
+    <nav class="bottom-nav">
+      {prevId
+        ? <a href={`/albums/${slug}/${prevId}/`} class="nav-btn" id="prev-btn">‹</a>
+        : <span class="nav-btn disabled">‹</span>
+      }
+      <span class="nav-counter">{index + 1} of {total}</span>
+      {nextId
+        ? <a href={`/albums/${slug}/${nextId}/`} class="nav-btn" id="next-btn">›</a>
+        : <span class="nav-btn disabled">›</span>
+      }
+      <button class="nav-btn autoplay-btn" id="autoplay-btn">▶ Autoplay</button>
+    </nav>
+
+  </div>
+</BaseLayout>
+
+<!-- Use set:html to prevent Astro from HTML-escaping the JSON -->
+<script type="application/json" id="photo-list-data" is:inline set:html={JSON.stringify(photoList)}></script>
+<script type="application/json" id="photo-meta" is:inline set:html={JSON.stringify({ currentIndex: index })}></script>
+
+<script>
+  function initPhotoPage() {
+  const mainArea = document.getElementById('main-area')
+  const rpStrip  = document.getElementById('rp-strip')
+  const rpClose  = document.getElementById('rp-close')
+  if (!mainArea || !rpStrip || !rpClose) return
+
+  // AbortController — cleans up all listeners on next navigation
+  const ctrl = new AbortController()
+  const sig  = ctrl.signal
+  let autoplayTimer: ReturnType<typeof setInterval> | null = null
+  document.addEventListener('astro:before-swap', () => {
+    ctrl.abort()
+    if (autoplayTimer) { clearInterval(autoplayTimer); autoplayTimer = null }
+    if (document.fullscreenElement) document.exitFullscreen()
+  }, { once: true })
+
+  // ── Right panel toggle ────────────────────────────
+  const PANEL_KEY = 'photo-panel-open'
+
+  function setPanelOpen(open: boolean) {
+    mainArea.classList.toggle('panel-open', open)
+    rpStrip.classList.toggle('active', open)
+    try { sessionStorage.setItem(PANEL_KEY, String(open)) } catch {}
+  }
+
+  // Restore panel state instantly (no transition animation on load)
+  mainArea.style.transition = 'none'
+  if (sessionStorage.getItem(PANEL_KEY) === 'true') setPanelOpen(true)
+  requestAnimationFrame(() => { mainArea.style.transition = '' })
+
+  rpStrip.addEventListener('click', () => setPanelOpen(!mainArea.classList.contains('panel-open')), { signal: sig })
+  rpClose.addEventListener('click',  () => setPanelOpen(false), { signal: sig })
+
+  // ── Keyboard navigation ───────────────────────────
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft')  (document.getElementById('prev-btn') as HTMLElement | null)?.click()
+    if (e.key === 'ArrowRight') (document.getElementById('next-btn') as HTMLElement | null)?.click()
+    if (e.key === 'i' || e.key === 'I') rpStrip.click()
+    if (e.key === 'Escape') {
+      if (document.fullscreenElement) document.exitFullscreen()
+      else setPanelOpen(false)
+    }
+  }, { signal: sig })
+
+  // ── Zoom & pan ────────────────────────────────────
+  const container = document.getElementById('photo-container')!
+  const img       = document.getElementById('main-photo') as HTMLImageElement
+
+  let scale = 1, tx = 0, ty = 0
+  let dragging = false, startX = 0, startY = 0, startTx = 0, startTy = 0
+
+  function clamp(s: number, x: number, y: number): [number, number] {
+    if (s <= 1) return [0, 0]
+    const mx = (container.clientWidth  * (s - 1)) / (2 * s)
+    const my = (container.clientHeight * (s - 1)) / (2 * s)
+    return [Math.max(-mx, Math.min(mx, x)), Math.max(-my, Math.min(my, y))]
+  }
+
+  function applyTransform() {
+    img.style.transform = `scale(${scale}) translate(${tx}px, ${ty}px)`
+    container.style.cursor = scale > 1 ? 'move' : 'zoom-in'
+  }
+
+  container.addEventListener('wheel', e => {
+    e.preventDefault()
+    scale = Math.max(1, Math.min(6, scale + (e.deltaY > 0 ? -0.15 : 0.15)))
+    ;[tx, ty] = clamp(scale, tx, ty)
+    applyTransform()
+  }, { passive: false, signal: sig })
+
+  container.addEventListener('dblclick', () => { scale = 1; tx = 0; ty = 0; applyTransform() }, { signal: sig })
+
+  container.addEventListener('mousedown', e => {
+    if (scale <= 1) return
+    dragging = true
+    startX = e.clientX; startY = e.clientY; startTx = tx; startTy = ty
+    container.style.cursor = 'grabbing'
+    e.preventDefault()
+  }, { signal: sig })
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return
+    ;[tx, ty] = clamp(scale, startTx + (e.clientX - startX) / scale, startTy + (e.clientY - startY) / scale)
+    applyTransform()
+  }, { signal: sig })
+  window.addEventListener('mouseup', () => { dragging = false; applyTransform() }, { signal: sig })
+
+  // Touch pinch
+  let lastDist = 0
+  container.addEventListener('touchstart', e => {
+    if (e.touches.length === 2)
+      lastDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY)
+  }, { passive: true, signal: sig })
+  container.addEventListener('touchmove', e => {
+    if (e.touches.length !== 2) return
+    const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY)
+    scale = Math.max(1, Math.min(6, scale + (d - lastDist) / 100))
+    ;[tx, ty] = clamp(scale, tx, ty)
+    applyTransform(); lastDist = d
+  }, { passive: true, signal: sig })
+
+  // ── Autoplay ──────────────────────────────────────
+  const autoplayBtn = document.getElementById('autoplay-btn')!
+  const photoList: { id: string; url: string }[] = JSON.parse(
+    document.getElementById('photo-list-data')!.textContent || '[]'
+  )
+
+  function shuffle<T>(arr: T[]): T[] {
+    const a = [...arr]
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]]
+    }
+    return a
+  }
+
+  autoplayBtn.addEventListener('click', async () => {
+    if (autoplayTimer) {
+      clearInterval(autoplayTimer); autoplayTimer = null
+      if (document.fullscreenElement) await document.exitFullscreen()
+      autoplayBtn.textContent = '▶ Autoplay'
+      img.src = img.dataset.original || img.src
+      return
+    }
+
+    img.dataset.original = img.src
+    const shuffled = shuffle(photoList)
+    let idx = 0
+
+    try { await document.documentElement.requestFullscreen() } catch {}
+    autoplayBtn.textContent = '■ Stop'
+
+    function showNext() {
+      img.style.opacity = '0'
+      setTimeout(() => { img.src = shuffled[idx++ % shuffled.length].url; img.style.opacity = '1' }, 400)
+    }
+
+    showNext()
+    autoplayTimer = setInterval(showNext, 5000)
+
+    document.addEventListener('fullscreenchange', () => {
+      if (!document.fullscreenElement && autoplayTimer) {
+        clearInterval(autoplayTimer); autoplayTimer = null
+        autoplayBtn.textContent = '▶ Autoplay'
+        img.style.opacity = '1'
+        img.src = img.dataset.original || img.src
+      }
+    }, { once: true })
+  })
+
+  // ── Mini map + reverse geocode ────────────────────
+  const mapEl  = document.getElementById('mini-map')
+  const geoEl  = document.getElementById('geo-location')
+  if (mapEl) {
+    const lat = parseFloat(mapEl.dataset.lat || '')
+    const lon = parseFloat(mapEl.dataset.lon || '')
+
+    if (!isNaN(lat) && !isNaN(lon)) {
+      // Reverse geocode via Nominatim
+      if (geoEl) {
+        fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&accept-language=en`, {
+          headers: { 'User-Agent': 'portfolio-site/1.0' }
+        })
+          .then(r => r.json())
+          .then(d => {
+            const city    = d.address?.city || d.address?.town || d.address?.village || d.address?.municipality
+            const country = d.address?.country
+            geoEl.textContent = [city, country].filter(Boolean).join(', ') || ''
+          })
+          .catch(() => { geoEl.textContent = '' })
+      }
+
+      // Load Leaflet CSS
+      const leafletCss = document.createElement('link')
+      leafletCss.rel = 'stylesheet'
+      leafletCss.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
+      document.head.appendChild(leafletCss)
+
+      // Load Leaflet JS then init map
+      const leafletJs = document.createElement('script')
+      leafletJs.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+      leafletJs.onload = () => {
+        const L = (window as any).L
+
+        const map = L.map(mapEl, {
+          center: [lat, lon],
+          zoom: 14,
+          zoomControl: false,
+          attributionControl: false,
+          dragging: false,
+          scrollWheelZoom: false,
+          doubleClickZoom: false,
+          touchZoom: false,
+        })
+
+        // CartoDB Dark Matter tiles (dark with labels)
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+          maxZoom: 19,
+        }).addTo(map)
+
+        // Blue teardrop pin with white dot
+        const pinIcon = L.divIcon({
+          html: `<svg width="24" height="36" viewBox="0 0 24 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 24 12 24s12-15 12-24C24 5.4 18.6 0 12 0z" fill="#4A90E2"/>
+            <circle cx="12" cy="12" r="5" fill="white"/>
+          </svg>`,
+          className: '',
+          iconSize: [24, 36],
+          iconAnchor: [12, 36],
+        })
+        L.marker([lat, lon], { icon: pinIcon }).addTo(map)
+      }
+      document.head.appendChild(leafletJs)
+    }
+  }
+  } // end initPhotoPage
+
+  document.addEventListener('astro:page-load', initPhotoPage)
+</script>
+
+<style>
+  /* ── Page shell ── */
+  .photo-page {
+    display: flex;
+    flex-direction: column;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: var(--color-bg);
+    color: var(--color-text);
+  }
+
+  /* ── Top bar ── */
+  .top-bar {
+    height: var(--top-bar-h);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 var(--space-4);
+    border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
+    gap: var(--space-3);
+  }
+
+  .back-link {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--color-text);
+    font-size: var(--font-md);
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    transition: opacity var(--transition);
+    white-space: nowrap;
+  }
+
+  .back-link:hover { opacity: 0.7; }
+
+  .back-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+  }
+
+  .top-counter {
+    font-size: var(--font-sm);
+    color: var(--color-text-muted);
+    font-variant-numeric: tabular-nums;
+    opacity: 0.6;
+  }
+
+  /* ── Main area ── */
+  .main-area {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr var(--right-panel-thin-w);
+    overflow: hidden;
+    transition: grid-template-columns 0.25s ease;
+  }
+
+  .main-area.panel-open {
+    grid-template-columns: 1fr var(--right-panel-w);
+  }
+
+  /* ── Photo container ── */
+  .photo-container {
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-bg);
+    cursor: zoom-in;
+  }
+
+  .main-photo {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    transform-origin: center center;
+    user-select: none;
+    -webkit-user-drag: none;
+    transition: opacity 0.4s ease;
+  }
+
+  /* ── Right panel ── */
+  .right-panel {
+    display: flex;
+    flex-direction: row;
+    overflow: hidden;
+    border-left: 1px solid var(--color-border);
+    background: var(--color-surface);
+  }
+
+  /* Always-visible 48px strip */
+  .rp-strip {
+    width: var(--right-panel-thin-w);
+    flex-shrink: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: var(--space-3);
+    background: none;
+    border: none;
+    border-right: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: color var(--transition), background var(--transition);
+  }
+
+  .rp-strip:hover,
+  .rp-strip.active {
+    color: var(--color-text);
+    background: var(--color-surface-2);
+  }
+
+  /* Expandable content */
+  .rp-content {
+    width: calc(var(--right-panel-w) - var(--right-panel-thin-w));
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+
+  .main-area.panel-open .rp-content {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .rp-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-3);
+    border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
+  }
+
+  .rp-title {
+    font-size: var(--font-sm);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+
+  .rp-close {
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    font-size: 16px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius);
+    transition: color var(--transition), background var(--transition);
+  }
+
+  .rp-close:hover {
+    color: var(--color-text);
+    background: var(--color-surface-2);
+  }
+
+  .rp-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+  }
+
+  /* ── EXIF sections ── */
+  .exif-section {
+    display: grid;
+    grid-template-columns: 28px 1fr;
+    gap: var(--space-2);
+    align-items: start;
+    padding: var(--space-2) 0;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .exif-section:first-child { border-top: none; padding-top: 0; }
+
+  .exif-icon-col {
+    display: flex;
+    justify-content: center;
+    padding-top: 1px;
+    color: var(--color-text-muted);
+  }
+
+  .exif-icon-col svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .exif-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: var(--font-sm);
+    color: var(--color-text);
+    line-height: 1.4;
+  }
+
+  .exif-muted { color: var(--color-text-muted); }
+
+  .exif-settings {
+    font-size: var(--font-sm);
+    letter-spacing: 0.02em;
+    color: var(--color-text);
+  }
+
+  /* ── Mini map ── */
+  .mini-map {
+    margin-top: var(--space-2);
+    height: 160px;
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+  }
+
+  /* ── Bottom nav ── */
+  .bottom-nav {
+    height: var(--bottom-nav-h);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    border-top: 1px solid var(--color-border);
+    padding: 0 var(--space-4);
+    flex-shrink: 0;
+  }
+
+  .nav-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    height: 36px;
+    padding: 0 var(--space-3);
+    border-radius: var(--radius);
+    font-size: var(--font-md);
+    font-weight: 300;
+    color: var(--color-text-muted);
+    background: none;
+    border: 1px solid var(--color-border);
+    transition: color var(--transition), border-color var(--transition), background var(--transition);
+    white-space: nowrap;
+  }
+
+  a.nav-btn:hover {
+    color: var(--color-text);
+    border-color: var(--color-accent);
+    background: var(--color-accent-dim);
+  }
+
+  .nav-btn.disabled { opacity: 0.2; cursor: default; }
+
+  .autoplay-btn {
+    font-size: var(--font-sm);
+    font-weight: 500;
+    color: var(--color-accent);
+    border-color: var(--color-accent);
+    margin-left: var(--space-3);
+    font-family: var(--font-sans);
+  }
+
+  .autoplay-btn:hover { background: var(--color-accent-dim); }
+
+  .nav-counter {
+    font-size: var(--font-sm);
+    color: var(--color-text-muted);
+    font-variant-numeric: tabular-nums;
+    min-width: 60px;
+    text-align: center;
+    opacity: 0.7;
+  }
+</style>

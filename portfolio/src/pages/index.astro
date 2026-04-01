@@ -1,0 +1,164 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro'
+import LeftPanel from '../components/LeftPanel.astro'
+import { fetchResources, slugify, extractYear } from '../lib/lightroom'
+import selectionsRaw from '../../selections.json'
+
+const selections = selectionsRaw as Record<string, { slug: string; photos: string[] }>
+
+// Bail early if no selections yet
+const hasSelections = Object.keys(selections).length > 0
+
+let albums: {
+  slug: string
+  name: string
+  coverUrl: string
+  year: string
+  photoCount: number
+}[] = []
+
+if (hasSelections) {
+  const resources = await fetchResources()
+
+  albums = Object.entries(selections)
+    .map(([albumId, { slug, photos }]) => {
+      const resource = resources.find(r => r.id === albumId)
+      return {
+        slug,
+        name: resource?.name ?? albumId,
+        coverUrl: resource?.coverUrl ?? '',
+        year: resource ? extractYear(resource.name) : '',
+        photoCount: photos.length,
+      }
+    })
+    .sort((a, b) => b.name.localeCompare(a.name))
+}
+
+const panelAlbums = albums.map(a => ({ slug: a.slug, name: a.name, year: a.year }))
+---
+
+<BaseLayout title="Portfolio">
+  {hasSelections && <LeftPanel albums={panelAlbums} />}
+
+  <div class="page-layout" class:list={[{ 'has-panel': hasSelections }]}>
+    <main class="main-content">
+      {!hasSelections ? (
+        <div class="empty">
+          <p>No albums yet. Run the selector tool to add photos.</p>
+        </div>
+      ) : (
+        <div class="album-grid">
+          {albums.map(album => (
+            <a href={`/albums/${album.slug}/`} class="album-card">
+              <div class="album-cover">
+                {album.coverUrl
+                  ? <img src={album.coverUrl} alt={album.name} loading="lazy" />
+                  : <div class="cover-placeholder" />
+                }
+              </div>
+              <div class="album-meta">
+                <span class="album-name">{album.name}</span>
+                <span class="album-count">{album.photoCount} photos</span>
+              </div>
+            </a>
+          ))}
+        </div>
+      )}
+    </main>
+  </div>
+</BaseLayout>
+
+<style>
+  .page-layout {
+    min-height: 100vh;
+    background: var(--color-bg);
+  }
+
+  .page-layout.has-panel {
+    padding-left: var(--panel-width);
+    transition: padding-left 0.25s ease;
+  }
+
+  :global(body.panel-thin) .page-layout.has-panel {
+    padding-left: var(--panel-width-thin);
+  }
+
+  .main-content {
+    padding: var(--space-5);
+  }
+
+  .empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 60vh;
+    color: var(--color-text-muted);
+  }
+
+  /* ── Album Grid ── */
+
+  .album-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--space-4);
+  }
+
+  .album-card {
+    display: block;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    transition: border-color var(--transition), transform var(--transition);
+  }
+
+  .album-card:hover {
+    border-color: var(--color-accent);
+  }
+
+  .album-cover {
+    aspect-ratio: 3 / 2;
+    overflow: hidden;
+    background: var(--color-surface-2);
+  }
+
+  .album-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.4s ease;
+  }
+
+  .album-card:hover .album-cover img {
+    transform: none;
+  }
+
+  .cover-placeholder {
+    width: 100%;
+    height: 100%;
+    background: var(--color-surface-2);
+  }
+
+  .album-meta {
+    padding: var(--space-3);
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+
+  .album-name {
+    font-size: var(--font-sm);
+    font-weight: 500;
+    color: var(--color-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .album-count {
+    font-size: var(--font-sm);
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+  }
+</style>

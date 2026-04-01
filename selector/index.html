@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Photo Selector</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header>
+    <div class="url-bar">
+      <input
+        type="text"
+        id="url-input"
+        placeholder="https://lightroom.adobe.com/gallery/ACCOUNT/albums/ALBUM/assets"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <button id="load-btn">Load</button>
+    </div>
+    <div id="album-info" class="album-info hidden">
+      <span id="album-name" class="album-name"></span>
+      <span id="album-slug" class="album-slug"></span>
+      <span id="selection-count" class="selection-count">0 selected</span>
+    </div>
+  </header>
+
+  <main>
+    <div id="empty-state" class="empty-state">
+      <p>Paste a Lightroom gallery URL above and click Load</p>
+    </div>
+    <div id="grid" class="grid"></div>
+  </main>
+
+  <footer id="save-bar" class="save-bar hidden">
+    <span id="save-info" class="save-info"></span>
+    <button id="save-btn">Save Selection</button>
+  </footer>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

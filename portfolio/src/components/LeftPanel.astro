@@ -1,0 +1,303 @@
+---
+interface AlbumEntry {
+  slug: string
+  name: string
+  year: string
+}
+
+interface Props {
+  albums: AlbumEntry[]
+  currentSlug?: string
+}
+
+const { albums, currentSlug } = Astro.props
+
+const groups: Record<string, AlbumEntry[]> = {}
+for (const album of albums) {
+  const key = album.year || 'Rest'
+  if (!groups[key]) groups[key] = []
+  groups[key].push(album)
+}
+
+const sortedYears = Object.keys(groups)
+  .filter(y => y !== 'Rest')
+  .sort((a, b) => Number(b) - Number(a))
+if (groups['Rest']) sortedYears.push('Rest')
+
+const currentYear = albums.find(a => a.slug === currentSlug)?.year || ''
+---
+
+<aside class="left-panel" id="left-panel">
+  <div class="panel-top">
+    <div class="logo" id="logo">
+      <div class="logo-letter"><img src="/100.png" /><span>Dudito Travel Blog</span></div>
+    </div>
+    <button class="toggle-btn" id="toggle-btn" aria-label="Toggle panel width">‹</button>
+  </div>
+
+  <nav class="panel-nav">
+    <a href="/" class={`show-all ${!currentSlug ? 'active' : ''}`} title="Show All">
+      <span class="nav-icon">⊞</span>
+      <span class="nav-label">Show All</span>
+    </a>
+
+    <div class="accordion">
+      {sortedYears.map(year => (
+        <div class="acc-item" data-year={year} data-open={year === currentYear || year === sortedYears[0] ? 'true' : 'false'}>
+          <button class="acc-header" title={year}>
+            <span class="acc-year">{year}</span>
+            <span class="acc-chevron">›</span>
+          </button>
+          <div class="acc-body">
+            {groups[year].map(album => (
+              <a
+                href={`/albums/${album.slug}/`}
+                class={`album-link ${album.slug === currentSlug ? 'active' : ''}`}
+                title={album.name}
+              >
+                {album.name}
+              </a>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  </nav>
+</aside>
+
+<script>
+  function initPanel() {
+    const panel     = document.getElementById('left-panel')
+    const logo     = document.getElementById('logo')
+    const toggleBtn = document.getElementById('toggle-btn')
+    if (!panel || !toggleBtn || !logo) return
+
+    const KEY = 'panel-thin'
+
+    function setThin(thin: boolean) {
+      panel.classList.toggle('thin', thin)
+      logo.classList.toggle('thin', thin)
+      document.body.classList.toggle('panel-thin', thin)
+      toggleBtn.textContent = thin ? '›' : '‹'
+      try { sessionStorage.setItem(KEY, String(thin)) } catch {}
+    }
+
+    const stored = sessionStorage.getItem(KEY)
+    setThin(stored === 'true')
+
+    toggleBtn.addEventListener('click', () => setThin(!panel.classList.contains('thin')))
+
+    // Accordion
+    document.querySelectorAll<HTMLElement>('.acc-item').forEach(item => {
+      const header = item.querySelector<HTMLElement>('.acc-header')!
+      item.classList.toggle('open', item.dataset.open === 'true')
+      header.addEventListener('click', () => {
+        if (panel.classList.contains('thin')) return
+        item.classList.toggle('open')
+      })
+    })
+  }
+
+  document.addEventListener('astro:page-load', initPanel)
+</script>
+
+<style>
+  .left-panel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: var(--panel-width);
+    background: var(--color-surface);
+    border-right: 1px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+    z-index: 100;
+    transition: width 0.25s ease;
+    overflow: hidden;
+  }
+
+  .left-panel.thin {
+    width: var(--panel-width-thin);
+  }
+
+  /* ── Top ── */
+  .panel-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-3);
+    border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
+    min-height: 60px;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 100%;
+  }
+
+  .logo.thin {
+    width: 32px;
+    height: 32px;
+  }
+
+  .logo.thin .logo-letter span {
+    display: none;
+  }
+
+  .logo-letter {
+    font-size: var(--font-sm);
+    font-weight: 600;
+    color: var(--color-accent);
+  }
+
+  .logo-letter img {
+    border-radius: 100%;
+    width: 100%;
+  }
+
+  .toggle-btn {
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    font-size: 33px;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius);
+    transition: color var(--transition), background var(--transition);
+    flex-shrink: 0;
+    position: relative;
+    left: -24px;
+  }
+
+  .left-panel.thin .toggle-btn {
+    left: -8px;
+  }
+
+  .toggle-btn:hover {
+    color: var(--color-text);
+    background: var(--color-surface-2);
+  }
+
+  /* ── Nav ── */
+  .panel-nav {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: var(--space-2) 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+  }
+
+  .show-all {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--font-sm);
+    font-weight: 500;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    transition: color var(--transition);
+  }
+
+  .show-all:hover { color: var(--color-text); }
+  .show-all.active { color: var(--color-accent); }
+
+  .nav-icon {
+    font-size: 33px;
+    flex-shrink: 0;
+    top: -2px;
+    opacity: 0.8;
+    position: relative;
+  }
+
+  /* hidden in thin mode */
+  .nav-label {
+    transition: opacity var(--transition);
+  }
+
+  .left-panel.thin .nav-label {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .left-panel.thin .toggle-btn {
+    /* center the toggle button when thin */
+    margin: 0 auto;
+  }
+
+  .left-panel.thin .panel-top {
+    justify-content: center;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  /* ── Accordion ── */
+  .accordion {
+    margin-top: var(--space-2);
+  }
+
+  .acc-header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-1) var(--space-3);
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    font-size: var(--font-sm);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-align: left;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color var(--transition);
+  }
+
+  .acc-header:hover { color: var(--color-text); }
+
+  .acc-chevron {
+    font-size: 24px;
+    transition: transform var(--transition);
+    flex-shrink: 0;
+  }
+
+  .acc-item.open .acc-chevron { transform: rotate(90deg); }
+
+  /* Hide chevron and albums in thin mode */
+  .left-panel.thin .acc-chevron { display: none; }
+  .left-panel.thin .acc-body    { display: none !important; }
+  .left-panel.thin .acc-header  { justify-content: center; padding: var(--space-1) 0; }
+
+  .acc-body {
+    display: none;
+    flex-direction: column;
+    padding-bottom: var(--space-1);
+  }
+
+  .acc-item.open .acc-body { display: flex; }
+
+  .album-link {
+    display: block;
+    padding: 5px var(--space-3) 5px calc(var(--space-3) + 6px);
+    font-size: var(--font-sm);
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: color var(--transition);
+  }
+
+  .album-link:hover { color: var(--color-text); }
+  .album-link.active { color: var(--color-accent); font-weight: 500; }
+</style>
