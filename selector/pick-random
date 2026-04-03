@@ -1,0 +1,146 @@
+#!/usr/bin/env node
+
+// Usage: ./pick-random <count> <output_dir>
+
+import fs from 'fs'
+import path from 'path'
+import https from 'https'
+import { fileURLToPath } from 'url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+const ACCOUNT = '0aa2ddec4f3d4206b464662e22cc690f'
+const BASE = `https://lightroom.adobe.com/v2/spaces/${ACCOUNT}`
+const LR_HEADERS = { 'X-Api-Key': 'photoshop_ux' }
+const SELECTIONS_PATH = path.join(__dirname, '../portfolio/selections.json')
+
+// ── Args ──────────────────────────────────────────
+
+const count = parseInt(process.argv[2], 10)
+const outDir = process.argv[3]
+
+if (!count || !outDir) {
+  console.error('Usage: ./pick-random <count> <output_dir>')
+  process.exit(1)
+}
+
+// ── Helpers ───────────────────────────────────────
+
+async function fetchLR(url) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { headers: LR_HEADERS }, (res) => {
+      let body = ''
+      res.on('data', chunk => body += chunk)
+      res.on('end', () => {
+        if (res.statusCode !== 200) return reject(new Error(`LR API ${res.statusCode}: ${url}`))
+        const clean = body.replace(/^while\s*\(1\)\s*\{\}\s*/, '').trim()
+        resolve(JSON.parse(clean))
+      })
+    })
+    req.on('error', reject)
+  })
+}
+
+function rendition(links, size, base = '') {
+  const href = links?.[`/rels/rendition_type/${size}`]?.href || ''
+  if (!href) return ''
+  if (href.startsWith('http')) return href
+  return base + href
+}
+
+function fixBase(raw) {
+  return (raw || '').replace('https://photos.adobe.io/v2/', 'https://lightroom.adobe.com/v2c/')
+}
+
+async function downloadFile(url, dest) {
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(dest)
+    const get = (u) => {
+      https.get(u, { headers: LR_HEADERS }, (res) => {
+        if (res.statusCode === 301 || res.statusCode === 302) {
+          file.close()
+          fs.unlinkSync(dest)
+          return get(res.headers.location)
+        }
+        if (res.statusCode !== 200) {
+          return reject(new Error(`Download failed ${res.statusCode}: ${u}`))
+        }
+        res.pipe(file)
+        file.on('finish', () => file.close(resolve))
+      }).on('error', reject)
+    }
+    get(url)
+  })
+}
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]]
+  }
+  return arr
+}
+
+// ── Main ──────────────────────────────────────────
+
+const selections = JSON.parse(fs.readFileSync(SELECTIONS_PATH, 'utf8'))
+
+// Collect all {albumId, photoId} pairs
+const all = []
+for (const [albumId, { photos }] of Object.entries(selections)) {
+  for (const photoId of photos) {
+    all.push({ albumId, photoId })
+  }
+}
+
+if (count > all.length) {
+  console.error(`Requested ${count} but only ${all.length} photos available.`)
+  process.exit(1)
+}
+
+shuffle(all)
+const picked = all.slice(0, count)
+
+// Group by album to minimise API calls
+const byAlbum = {}
+for (const { albumId, photoId } of picked) {
+  if (!byAlbum[albumId]) byAlbum[albumId] = []
+  byAlbum[albumId].push(photoId)
+}
+
+fs.mkdirSync(outDir, { recursive: true })
+
+let downloaded = 0
+
+for (const [albumId, photoIds] of Object.entries(byAlbum)) {
+  const url =
+    `${BASE}/albums/${albumId}/assets` +
+    `?embed=asset%3Bself&order_after=-&exclude=incomplete&subtype=image%3Bvideo%3Blayout_segment`
+
+  process.stdout.write(`Fetching album ${albumId}...`)
+  const data = await fetchLR(url)
+  const base = fixBase(data.base)
+  const wantSet = new Set(photoIds)
+  console.log(` ${data.resources?.length ?? 0} assets`)
+
+  for (const resource of (data.resources || [])) {
+    const assetId = resource.asset?.id || resource.id
+    if (!wantSet.has(assetId)) continue
+
+    const links = resource.asset?.links || {}
+    const imgUrl = rendition(links, '2048', base) || rendition(links, '1280', base)
+    if (!imgUrl) {
+      console.warn(`  No URL for ${assetId}, skipping.`)
+      continue
+    }
+
+    const ext = (resource.asset?.payload?.importSource?.contentType || '').includes('jpeg') ? 'jpg' : 'jpg'
+    const dest = path.join(outDir, `${assetId}.${ext}`)
+    process.stdout.write(`  Downloading ${assetId}...`)
+    await downloadFile(imgUrl, dest)
+    downloaded++
+    console.log(` done (${downloaded}/${count})`)
+  }
+}
+
+console.log(`\nDone. ${downloaded} photo(s) saved to ${outDir}`)
