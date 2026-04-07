@@ -12,7 +12,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ACCOUNT = '0aa2ddec4f3d4206b464662e22cc690f'
 const BASE = `https://lightroom.adobe.com/v2/spaces/${ACCOUNT}`
 const LR_HEADERS = { 'X-Api-Key': 'photoshop_ux' }
-const SELECTIONS_PATH = path.join(__dirname, '../portfolio/selections.json')
+const SELECTIONS_PATH = path.join(__dirname, '../../portfolio/selections.json')
 
 // ── Args ──────────────────────────────────────────
 
