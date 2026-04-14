@@ -1,6 +1,7 @@
 ---
 import '../styles/global.css'
 import { ViewTransitions } from 'astro:transitions'
+import selectionsRaw from '../../selections.json'
 
 interface Props {
   title?: string
@@ -9,6 +10,10 @@ interface Props {
 }
 const { title = 'Duditos', ogImage, ogDescription } = Astro.props
 const canonicalUrl = Astro.url.href
+
+const tourAlbums = Object.values(
+  selectionsRaw as Record<string, { slug: string; photos: string[] }>
+).map(({ slug, photos }) => ({ slug, photos }))
 ---
 <!DOCTYPE html>
 <html lang="en">
@@ -35,5 +40,68 @@ const canonicalUrl = Astro.url.href
     try { if (sessionStorage.getItem('panel-thin') === 'true') document.body.classList.add('panel-thin') } catch {}
   </script>
   <slot />
+
+  <!-- Tour data: embedded at build time, read by the tour script below -->
+  <script type="application/json" id="tour-data" is:inline set:html={JSON.stringify(tourAlbums)}></script>
+
+  <script>
+    // Embed-tour: runs once per session, persists across ViewTransition navigations.
+    // Activated by postMessage({ action: 'start-tour' }) from a parent frame.
+    import { navigate } from 'astro:transitions/client'
+
+    if (!(window as any).__tourInit) {
+      ;(window as any).__tourInit = true
+
+      let tourTimer: ReturnType<typeof setTimeout> | null = null
+      let running = false
+
+      function stopTour() {
+        running = false
+        if (tourTimer) { clearTimeout(tourTimer); tourTimer = null }
+      }
+
+      function getAlbums(): { slug: string; photos: string[] }[] {
+        try {
+          const el = document.getElementById('tour-data')
+          return el ? JSON.parse(el.textContent || '[]') : []
+        } catch { return [] }
+      }
+
+      function rand<T>(arr: T[]): T {
+        return arr[Math.floor(Math.random() * arr.length)]
+      }
+
+      const BASE = import.meta.env.BASE_URL
+
+      function runStep(step: number, slug: string, photoId: string) {
+        if (!running) return
+
+        if (step === 0) {
+          navigate(`${BASE}albums/${slug}/`)
+          tourTimer = setTimeout(() => runStep(1, slug, photoId), 1800)
+        } else if (step === 1) {
+          navigate(`${BASE}albums/${slug}/${photoId}/`)
+          tourTimer = setTimeout(() => runStep(2, slug, photoId), 4000)
+        } else {
+          navigate(`${BASE}albums/${slug}/`)
+          tourTimer = setTimeout(() => startNewAlbum(), 1200)
+        }
+      }
+
+      function startNewAlbum() {
+        if (!running) return
+        const albums = getAlbums()
+        if (!albums.length) return
+        const album = rand(albums)
+        const photoId = rand(album.photos)
+        runStep(0, album.slug, photoId)
+      }
+
+      window.addEventListener('message', (e: MessageEvent) => {
+        if (e.data?.action === 'start-tour') { stopTour(); running = true; startNewAlbum() }
+        else if (e.data?.action === 'stop-tour') { stopTour() }
+      })
+    }
+  </script>
 </body>
 </html>
